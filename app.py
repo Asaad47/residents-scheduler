@@ -99,15 +99,18 @@ def style_cells(df, doctor_colors, show_day_numbers):
 st.title("Residents On-call Scheduling")
 
 # Input Section
-num_doctors = st.number_input("Number of doctors", min_value=1, max_value=30, step=1, value=3)
-selected_month = st.date_input("Select month (chosen day doesn't make a difference)", format="DD/MM/YYYY")
-month_and_year = selected_month.strftime("%B_%Y")
-first_day_of_month = selected_month.replace(day=1)
-starting_day = (first_day_of_month.weekday() + 1) % 7  # Sunday = 0, Monday = 1, ..., Saturday = 6
-days_in_month = (first_day_of_month.replace(month=first_day_of_month.month % 12 + 1, day=1) - timedelta(days=1)).day
+col1, col2 = st.columns([1, 2])
+with col1:
+    num_doctors = st.number_input("Number of doctors", min_value=1, max_value=30, step=1, value=3)
+with col2:
+    selected_month = st.date_input("Select month (chosen day doesn't make a difference)", format="DD/MM/YYYY")
+    month_and_year = selected_month.strftime("%B_%Y")
+    first_day_of_month = selected_month.replace(day=1)
+    starting_day = (first_day_of_month.weekday() + 1) % 7  # Sunday = 0, Monday = 1, ..., Saturday = 6
+    days_in_month = (first_day_of_month.replace(month=first_day_of_month.month % 12 + 1, day=1) - timedelta(days=1)).day
 
-st.markdown(f"- Days in Month (_{month_and_year}_): :blue-background[{days_in_month}]")
-st.markdown(f"- Starting day of the month: :blue-background[{first_day_of_month.strftime('%A')}]")
+    st.markdown(f"- Days in Month (_{month_and_year}_): :blue-badge[{days_in_month}]")
+    st.markdown(f"- Starting day of the month: :blue-badge[{first_day_of_month.strftime('%A')}]")
 
 # Off-day Selection
 st.subheader("Choose off-days for each doctor")
@@ -119,9 +122,12 @@ off_days_options = [
     for i in range(1, days_in_month + 1)
 ]
 for i in range(num_doctors):
-    doctor_name = st.text_input(f"Doctor {i+1} Name", value=f"Doctor {i+1}")
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        doctor_name = st.text_input(f"Doctor {i+1} Name", value=f"Doctor {i+1}")
+    with col2:
+        off_days[i] = st.multiselect(f"Off-days for :violet-background[{doctor_name}]", options=off_days_options)
     doctors_names[i] = doctor_name
-    off_days[i] = st.multiselect(f"Off-days for {doctor_name}", options=off_days_options)
 
 
 # Generate Schedule
@@ -130,7 +136,7 @@ if "schedule_df" not in st.session_state:
     st.session_state.generation_time = None
 
 if st.button("Generate Schedule"):
-    st.write("Generating schedule...")
+    # st.write("Generating schedule...")
     # Convert off-days to disallowed pairs
     disallowed_pairs = [(int(day.split("/")[0]) - 1, doctor_index) for doctor_index, days in off_days.items() for day in days]
     
@@ -141,12 +147,12 @@ if st.button("Generate Schedule"):
     st.session_state.generation_time = end_time - start_time
     
 if st.session_state.generation_time:
-    st.write("Generated Schedule!")
-    st.write(f"Total time taken for generating schedule: {st.session_state.generation_time:.2f} seconds")
+    st.write(f"Generated Schedule! Total time taken for generating schedule: {st.session_state.generation_time:.2f} seconds")
     
-st.divider()
 
 if st.session_state.schedule_df is not None:
+    st.divider()
+    
     schedule_df = st.session_state.schedule_df.copy()
     
     # Assign colors to doctors
@@ -197,20 +203,28 @@ def prepare_export_df(df, start_day, total_days, doctors_names):
     return pd.DataFrame(export_data)
 
 # Export to Excel and CSV
-if st.button("Export to Excel"):
-    if st.session_state.schedule_df is not None:
-        export_df = prepare_export_df(
-            st.session_state.schedule_df, starting_day, days_in_month, doctors_names
-        )
-        @st.cache_data
-        def convert_df_to_excel(df):
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                df.to_excel(writer, index=False)
-            processed_data = output.getvalue()
-            return processed_data
-        
-        excel_data = convert_df_to_excel(export_df)
+if st.session_state.schedule_df is not None:
+    export_df = prepare_export_df(
+        st.session_state.schedule_df, starting_day, days_in_month, doctors_names
+    )
+    @st.cache_data
+    def convert_df_to_excel(df):
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False)
+        processed_data = output.getvalue()
+        return processed_data
+            
+    excel_data = convert_df_to_excel(export_df)
+            
+    @st.cache_data
+    def convert_df_to_csv(df):
+        return df.to_csv(index=False).encode('utf-8')
+    
+    csv_data = convert_df_to_csv(export_df)
+    
+    col1, col2 = st.columns(2)
+    with col1:
         st.download_button(
             label="Download Schedule as Excel",
             data=excel_data,
@@ -218,17 +232,7 @@ if st.button("Export to Excel"):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-
-if st.button("Export to CSV"):
-    if st.session_state.schedule_df is not None:
-        export_df = prepare_export_df(
-            st.session_state.schedule_df, starting_day, days_in_month, doctors_names
-        )
-        @st.cache_data
-        def convert_df_to_csv(df):
-            return df.to_csv(index=False).encode('utf-8')
-        
-        csv_data = convert_df_to_csv(export_df)
+    with col2:
         st.download_button(
             label="Download Schedule as CSV",
             data=csv_data,
