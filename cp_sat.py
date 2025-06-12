@@ -89,6 +89,18 @@ def cp_sat_generate_schedule(n, m, start_day, disallowed_pairs,
         for i in range(n):
             model.Add(sum(w[i, k] for k in range(W)) >= Lw)
             model.Add(sum(w[i, k] for k in range(W)) <= Hw)
+            
+    # Add soft constraint: discourage assigning same person to consecutive days
+    consec_penalty = {}
+    for i in range(n):
+        for d in range(m - 1):
+            consec_penalty[i, d] = model.NewBoolVar(f"consec_penalty_{i}_{d}")
+            model.AddBoolAnd([b[i, d], b[i, d + 1]]).OnlyEnforceIf(consec_penalty[i, d])
+            model.AddBoolOr([b[i, d].Not(), b[i, d + 1].Not()]).OnlyEnforceIf(consec_penalty[i, d].Not())
+
+    # Objective: minimize number of consecutive assignments (weekends should still be covered)
+    model.Minimize(sum(consec_penalty[i, d] for i in range(n) for d in range(m - 1)))
+
 
     # Solver
     solver = cp_model.CpSolver()
